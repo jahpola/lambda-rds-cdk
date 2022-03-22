@@ -1,14 +1,20 @@
-import * as cdk from '@aws-cdk/core';
-import * as lambda from '@aws-cdk/aws-lambda';
-import { Tracing } from '@aws-cdk/aws-lambda';
-import { NodejsFunction} from '@aws-cdk/aws-lambda-nodejs';
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as path from 'path';
-import { Vpc, SubnetType } from '@aws-cdk/aws-ec2';
-import * as ec2 from '@aws-cdk/aws-ec2'; 
-import * as rds from '@aws-cdk/aws-rds';
+import { Vpc, SubnetType } from 'aws-cdk-lib/aws-ec2';
+import * as ec2 from 'aws-cdk-lib/aws-ec2'; 
+import * as rds from 'aws-cdk-lib/aws-rds';
+import { Construct } from "constructs";
+import {
+  CfnOutput,
+  Duration,
+  Stack,
+  StackProps,
+  RemovalPolicy,
+} from 'aws-cdk-lib';
 
-export class LambdaRdsStack extends cdk.Stack {
-  constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
+export class LambdaRdsStack extends Stack {
+  constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
     // The code that defines your stack goes here
@@ -48,13 +54,13 @@ export class LambdaRdsStack extends cdk.Stack {
       defaultDatabaseName: 'serverless',
       vpc: vpc,
       scaling: {
-        autoPause: cdk.Duration.minutes(10),
+        autoPause: Duration.minutes(10),
         minCapacity: 1,
         maxCapacity: 4
       },
       credentials: rds.Credentials.fromGeneratedSecret("serverless"),
       deletionProtection: false,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // Just delete the db, this is hazard!
+      removalPolicy: RemovalPolicy.DESTROY, // Just delete the db, this is hazard!
       // default ie no subnetgroup = private_with_nat automatically selected
       // note that changing these values will destroy the old db and create new one
       subnetGroup: db_subnet
@@ -65,7 +71,7 @@ export class LambdaRdsStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_14_X,
       handler: 'main',
       entry: path.join(__dirname, '../src/db-reader/main.ts'),
-      tracing: Tracing.ACTIVE,
+      tracing: lambda.Tracing.ACTIVE,
       bundling: {
         externalModules: ['aws-sdk'],
       },
@@ -81,7 +87,8 @@ export class LambdaRdsStack extends cdk.Stack {
 // ISOLATTON might require private link+api etc endpoints, 
 // recommendation: just use private_with_nat unless working in high security environments
         subnetType: ec2.SubnetType.PRIVATE_WITH_NAT 
-      }
+      },
+      architecture: lambda.Architecture.ARM_64,
     });
 
     // Allow access from reader lambda without creating a sg..
@@ -91,7 +98,7 @@ export class LambdaRdsStack extends cdk.Stack {
     //db.grantDataApiAccess(reader)
 
     // Outputs for import/export across stacks as needed below
-    new  cdk.CfnOutput(this, 'VPCid', {
+    new  CfnOutput(this, 'VPCid', {
       value: vpc.vpcId,
       description: "VPC id",
       exportName: "vpc-id"
