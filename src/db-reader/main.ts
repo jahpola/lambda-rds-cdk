@@ -1,6 +1,6 @@
-var mysql = require('mysql');
+const mysql = require("mysql");
 
-var connection = mysql.createConnection({
+const connection = mysql.createConnection({
   host: process.env.HOST,
   user: process.env.USER,
   password: process.env.SECRET,
@@ -8,14 +8,16 @@ var connection = mysql.createConnection({
 });
 
 exports.main = (event, context, callback) => {
-    connection.query('show tables', function (error, results, fields) {
-      if (error) {
-        connection.destroy();
-        throw error;
-      } else {
-        console.log(results);
-        callback(error, results);
-        connection.end(function (err) { callback(err, results);});
-      }
-    });
-  }
+  connection.query("show tables", function (error, results, fields) {
+    if (error) {
+      connection.destroy();
+      throw error;
+    } else {
+      console.log(results);
+      callback(error, results);
+      connection.end(function (err) {
+        callback(err, results);
+      });
+    }
+  });
+};
