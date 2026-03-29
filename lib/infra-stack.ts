@@ -68,7 +68,9 @@ export class LambdaRdsStack extends cdk.Stack {
       handler: "main",
       entry: path.join(__dirname, "../src/db-reader/main.ts"),
       tracing: lambda.Tracing.ACTIVE,
-      bundling: {},
+      bundling: {
+        externalModules: ["@aws-sdk/*"],
+      },
       environment: {
         SECRET_ARN: db.secret!.secretArn,
       },
