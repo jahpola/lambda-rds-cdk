@@ -71,7 +71,7 @@ export class LambdaRdsStack extends Stack {
 
     // Yes, the lambda code is utter crap... should be nuked from orbit and rewritten
     const reader = new NodejsFunction(this, "reader-function", {
-      runtime: lambda.Runtime.NODEJS_14_X,
+      runtime: lambda.Runtime.NO,
       handler: "main",
       entry: path.join(__dirname, "../src/db-reader/main.ts"),
       tracing: lambda.Tracing.ACTIVE,
