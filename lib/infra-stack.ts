@@ -1,20 +1,13 @@
+import * as cdk from 'aws-cdk-lib';
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as path from "path";
-import { Vpc, SubnetType } from "aws-cdk-lib/aws-ec2";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as rds from "aws-cdk-lib/aws-rds";
 import { Construct } from "constructs";
-import {
-  CfnOutput,
-  Duration,
-  Stack,
-  StackProps,
-  RemovalPolicy,
-} from "aws-cdk-lib";
 
-export class LambdaRdsStack extends Stack {
-  constructor(scope: Construct, id: string, props?: StackProps) {
+export class LambdaRdsStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
     // The code that defines your stack goes here
@@ -23,21 +16,21 @@ export class LambdaRdsStack extends Stack {
     // ISOLATED: Isolated Subnets do not route traffic to the Internet (in this VPC).
     // PRIVATE.: Subnet that routes to the internet, but not vice versa.
     // PUBLIC..: Subnet connected to the Internet
-    const vpc = new Vpc(this, "network", {
-      cidr: "10.0.0.0/16",
+    const vpc = new ec2.Vpc(this, "network", {
+      ipAddresses: ec2.IpAddresses.cidr("10.0.0.0/16"),
       natGateways: 1, // In production this should be 3, remember AZ design in AWS ie design for loss of 1 az always
       subnetConfiguration: [
         {
           name: "public",
-          subnetType: SubnetType.PUBLIC,
+          subnetType: ec2.SubnetType.PUBLIC,
         },
         {
           name: "private",
-          subnetType: SubnetType.PRIVATE_WITH_NAT,
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
         {
           name: "db-net",
-          subnetType: SubnetType.PRIVATE_ISOLATED,
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         },
       ],
     });
@@ -57,13 +50,13 @@ export class LambdaRdsStack extends Stack {
       defaultDatabaseName: "serverless",
       vpc: vpc,
       scaling: {
-        autoPause: Duration.minutes(10),
+        autoPause: cdk.Duration.minutes(10),
         minCapacity: 1,
         maxCapacity: 4,
       },
       credentials: rds.Credentials.fromGeneratedSecret("serverless"),
       deletionProtection: false,
-      removalPolicy: RemovalPolicy.DESTROY, // Just delete the db, this is hazard!
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // Just delete the db, this is hazard!
       // default ie no subnetgroup = private_with_nat automatically selected
       // note that changing these values will destroy the old db and create new one
       subnetGroup: db_subnet,
@@ -71,37 +64,32 @@ export class LambdaRdsStack extends Stack {
 
     // Yes, the lambda code is utter crap... should be nuked from orbit and rewritten
     const reader = new NodejsFunction(this, "reader-function", {
-      runtime: lambda.Runtime.NO,
+      runtime: lambda.Runtime.NODEJS_24_X,
       handler: "main",
       entry: path.join(__dirname, "../src/db-reader/main.ts"),
       tracing: lambda.Tracing.ACTIVE,
-      bundling: {
-        externalModules: ["aws-sdk"],
-      },
+      bundling: {},
       environment: {
-        HOST: db.clusterEndpoint.hostname,
-        DBNAME: db.secret?.secretValueFromJson("dbname").toString()!,
-        USER: db.secret?.secretValueFromJson("username").toString()!,
-        SECRET: db.secret?.secretValueFromJson("password").toString()!,
+        SECRET_ARN: db.secret!.secretArn,
       },
       vpc: vpc,
       vpcSubnets: {
-        // PRIVATE_WITH_NAT is required with outside access usually
-        // ISOLATTON might require private link+api etc endpoints,
-        // recommendation: just use private_with_nat unless working in high security environments
-        subnetType: ec2.SubnetType.PRIVATE_WITH_NAT,
+        // PRIVATE_WITH_EGRESS is required with outside access usually
+        // ISOLATION might require private link+api etc endpoints,
+        // recommendation: just use PRIVATE_WITH_EGRESS unless working in high security environments
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       },
       architecture: lambda.Architecture.ARM_64,
     });
 
-    // Allow access from reader lambda without creating a sg..
+    db.secret!.grantRead(reader);
     db.connections.allowDefaultPortFrom(reader);
 
     // Allows DataAPI access
     //db.grantDataApiAccess(reader)
 
     // Outputs for import/export across stacks as needed below
-    new CfnOutput(this, "VPCid", {
+    new cdk.CfnOutput(this, "VPCid", {
       value: vpc.vpcId,
       description: "VPC id",
       exportName: "vpc-id",

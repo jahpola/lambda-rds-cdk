@@ -1,23 +1,34 @@
-const mysql = require("mysql");
+import { SecretsManager } from "@aws-sdk/client-secrets-manager";
+import mysql from "mysql";
 
-const connection = mysql.createConnection({
-  host: process.env.HOST,
-  user: process.env.USER,
-  password: process.env.SECRET,
-  database: process.env.DBNAME,
-});
+const sm = new SecretsManager();
+let connection: any;
 
-exports.main = (event, context, callback) => {
-  connection.query("show tables", function (error, results, fields) {
-    if (error) {
-      connection.destroy();
-      throw error;
-    } else {
-      console.log(results);
-      callback(error, results);
-      connection.end(function (err) {
-        callback(err, results);
-      });
-    }
+async function getConnection() {
+  if (connection) return connection;
+  const resp = await sm.getSecretValue({ SecretId: process.env.SECRET_ARN });
+  const secret = JSON.parse(resp.SecretString!);
+  connection = mysql.createConnection({
+    host: secret.host,
+    user: secret.username,
+    password: secret.password,
+    database: secret.dbname,
   });
-};
+  return connection;
+}
+
+export async function main() {
+  const conn = await getConnection();
+  return new Promise((resolve, reject) => {
+    conn.query("show tables", (error: any, results: any) => {
+      if (error) {
+        connection = null;
+        conn.destroy();
+        reject(error);
+      } else {
+        console.log(results);
+        resolve(results);
+      }
+    });
+  });
+}
