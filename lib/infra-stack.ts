@@ -14,7 +14,7 @@ export class LambdaRdsStack extends cdk.Stack {
 
     // VPC subnet types are
     // ISOLATED: Isolated Subnets do not route traffic to the Internet (in this VPC).
-    // PRIVATE.: Subnet that routes to the internet, but not vice versa.
+    // PRIVATE.: Subnet that routes to the internet using nat gateway(s), but not vice versa.
     // PUBLIC..: Subnet connected to the Internet
     const vpc = new ec2.Vpc(this, "network", {
       ipAddresses: ec2.IpAddresses.cidr("10.0.0.0/16"),
